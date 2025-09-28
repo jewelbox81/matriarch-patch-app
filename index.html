@@ -413,7 +413,7 @@ const typeToImage = {
 };
 
     // Universal knob logic (mouse + touch)
-function makeKnob(id, options = {}) {
+function makeKnob(id, options={}) {
   const knob = document.getElementById(id);
   let isDragging = false;
   let startY, startAngle;
@@ -430,39 +430,45 @@ function makeKnob(id, options = {}) {
     return { cx: knobX + knobW / 2, cy: knobY + knobH / 2 };
   }
 
-  function startDrag(clientY) {
-    isDragging = true;
-    startY = clientY;
-    startAngle = currentAngle;
-  }
-
-  function doDrag(clientY) {
-    if (!isDragging) return;
-    const deltaY = startY - clientY;
+  function onMove(y) {
+    const deltaY = startY - y;
     currentAngle = startAngle + deltaY / sensitivity;
     currentAngle = Math.max(minAngle, Math.min(maxAngle, currentAngle));
     const { cx, cy } = getCenter();
     knob.setAttribute("transform", `rotate(${currentAngle} ${cx} ${cy})`);
   }
 
-  function endDrag() {
-    isDragging = false;
-  }
+  // Desktop
+  knob.addEventListener("mousedown", e => { 
+    e.preventDefault(); 
+    isDragging = true; 
+    startY = e.clientY; 
+    startAngle = currentAngle; 
+  });
+  document.addEventListener("mousemove", e => { if(isDragging) onMove(e.clientY); });
+  document.addEventListener("mouseup", () => { isDragging = false; });
 
-  // Mouse events
-  knob.addEventListener("mousedown", e => startDrag(e.clientY));
-  document.addEventListener("mousemove", e => doDrag(e.clientY));
-  document.addEventListener("mouseup", endDrag);
+  // Touch
+  knob.addEventListener("touchstart", e => {
+    e.preventDefault();
+    isDragging = true;
+    startY = e.touches[0].clientY;
+    startAngle = currentAngle;
+  }, {passive:false});
 
-  // Touch events
-  knob.addEventListener("touchstart", e => startDrag(e.touches[0].clientY));
-  document.addEventListener("touchmove", e => doDrag(e.touches[0].clientY));
-  document.addEventListener("touchend", endDrag);
+  document.addEventListener("touchmove", e => {
+    if (!isDragging) return;
+    e.preventDefault();
+    onMove(e.touches[0].clientY);
+  }, {passive:false});
+
+  document.addEventListener("touchend", () => { isDragging = false; });
 }
 
 
+
     // Selector knob logic (mouse + touch)
-function makeSelectorKnob(id, angles, options = {}) {
+function makeSelectorKnob(id, angles, options={}) {
   const knob = document.getElementById(id);
   let isDragging = false;
   let startY, startIndex = 0;
@@ -482,19 +488,8 @@ function makeSelectorKnob(id, angles, options = {}) {
   const { cx, cy } = getCenter();
   knob.setAttribute("transform", `rotate(${angles[startIndex]} ${cx} ${cy})`);
 
-  function startDrag(clientY) {
-    isDragging = true;
-    startY = clientY;
-    const transform = knob.getAttribute("transform");
-    const match = transform ? transform.match(/rotate\((-?\d+)/) : null;
-    const currentAngle = match ? parseFloat(match[1]) : angles[0];
-    startIndex = angles.reduce((prev, curr, i) => 
-      Math.abs(curr - currentAngle) < Math.abs(angles[prev] - currentAngle) ? i : prev, 0);
-  }
-
-  function doDrag(clientY) {
-    if (!isDragging) return;
-    const deltaY = startY - clientY;
+  function onMove(y) {
+    const deltaY = startY - y;
     let step = Math.round(deltaY / sensitivity);
     let index = startIndex + step;
     index = Math.max(0, Math.min(angles.length - 1, index));
@@ -502,19 +497,39 @@ function makeSelectorKnob(id, angles, options = {}) {
     knob.setAttribute("transform", `rotate(${angles[index]} ${cx} ${cy})`);
   }
 
-  function endDrag() {
-    isDragging = false;
-  }
+  // Desktop
+  knob.addEventListener("mousedown", e => {
+    e.preventDefault();
+    isDragging = true;
+    startY = e.clientY;
+    const transform = knob.getAttribute("transform");
+    const match = transform ? transform.match(/rotate\((-?\d+)/) : null;
+    const currentAngle = match ? parseFloat(match[1]) : angles[0];
+    startIndex = angles.reduce((prev, curr, i) => 
+      Math.abs(curr - currentAngle) < Math.abs(angles[prev] - currentAngle) ? i : prev, 0);
+  });
+  document.addEventListener("mousemove", e => { if(isDragging) onMove(e.clientY); });
+  document.addEventListener("mouseup", () => { isDragging = false; });
 
-  // Mouse events
-  knob.addEventListener("mousedown", e => startDrag(e.clientY));
-  document.addEventListener("mousemove", e => doDrag(e.clientY));
-  document.addEventListener("mouseup", endDrag);
+  // Touch
+  knob.addEventListener("touchstart", e => {
+    e.preventDefault();
+    isDragging = true;
+    startY = e.touches[0].clientY;
+    const transform = knob.getAttribute("transform");
+    const match = transform ? transform.match(/rotate\((-?\d+)/) : null;
+    const currentAngle = match ? parseFloat(match[1]) : angles[0];
+    startIndex = angles.reduce((prev, curr, i) => 
+      Math.abs(curr - currentAngle) < Math.abs(angles[prev] - currentAngle) ? i : prev, 0);
+  }, {passive:false});
 
-  // Touch events
-  knob.addEventListener("touchstart", e => startDrag(e.touches[0].clientY));
-  document.addEventListener("touchmove", e => doDrag(e.touches[0].clientY));
-  document.addEventListener("touchend", endDrag);
+  document.addEventListener("touchmove", e => {
+    if (!isDragging) return;
+    e.preventDefault();
+    onMove(e.touches[0].clientY);
+  }, {passive:false});
+
+  document.addEventListener("touchend", () => { isDragging = false; });
 }
 
 
@@ -526,41 +541,55 @@ function makeFader(id, minY, maxY) {
   let y = (minY + maxY) / 2;
   fader.setAttribute("y", y);
 
-  function startDrag(clientY) {
-    isDragging = true;
-    const pt = svg.createSVGPoint(); pt.x = 0; pt.y = clientY;
-    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
-    startY = cursor.y;
-    startFaderY = y;
-  }
-
-  function doDrag(clientY) {
-    if (!isDragging) return;
-    const pt = svg.createSVGPoint(); pt.x = 0; pt.y = clientY;
-    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
-    let delta = cursor.y - startY;
-
+  function onMove(cursorY) {
+    let delta = cursorY - startY;
     const sensitivity = 2; // smaller = faster, larger = slower
     y = startFaderY + delta / sensitivity;
-
-    // Clamp
     y = Math.max(minY, Math.min(maxY, y));
     fader.setAttribute("y", y);
   }
 
-  function endDrag() {
-    isDragging = false;
-  }
+  // Desktop
+  fader.addEventListener("mousedown", e => {
+    e.preventDefault();
+    isDragging = true;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    startY = cursor.y;
+    startFaderY = y;
+  });
 
-  // Mouse events
-  fader.addEventListener("mousedown", e => { startDrag(e.clientY); e.preventDefault(); });
-  document.addEventListener("mousemove", e => doDrag(e.clientY));
-  document.addEventListener("mouseup", endDrag);
+  document.addEventListener("mousemove", e => { if (isDragging) {
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    onMove(cursor.y);
+  }});
 
-  // Touch events
-  fader.addEventListener("touchstart", e => { startDrag(e.touches[0].clientY); e.preventDefault(); });
-  document.addEventListener("touchmove", e => doDrag(e.touches[0].clientY));
-  document.addEventListener("touchend", endDrag);
+  document.addEventListener("mouseup", () => { isDragging = false; });
+
+  // Touch
+  fader.addEventListener("touchstart", e => {
+    e.preventDefault();
+    isDragging = true;
+    const pt = svg.createSVGPoint();
+    pt.x = e.touches[0].clientX; pt.y = e.touches[0].clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    startY = cursor.y;
+    startFaderY = y;
+  }, {passive:false});
+
+  document.addEventListener("touchmove", e => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const pt = svg.createSVGPoint();
+    pt.x = e.touches[0].clientX; pt.y = e.touches[0].clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    onMove(cursor.y);
+  }, {passive:false});
+
+  document.addEventListener("touchend", () => { isDragging = false; });
 }
 
 	
@@ -572,41 +601,56 @@ function makeModwheel(id, minY, maxY) {
   let y = (minY + maxY) / 2;
   modwheel.setAttribute("y", y);
 
-  function startDrag(clientY) {
-    isDragging = true;
-    const pt = svg.createSVGPoint(); pt.x = 0; pt.y = clientY;
-    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
-    startY = cursor.y;
-    startWheelY = y;
-  }
-
-  function doDrag(clientY) {
-    if (!isDragging) return;
-    const pt = svg.createSVGPoint(); pt.x = 0; pt.y = clientY;
-    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
-    let delta = cursor.y - startY;
-
+  function onMove(cursorY) {
+    let delta = cursorY - startY;
     const sensitivity = 2; // smaller = faster, larger = slower
     y = startWheelY + delta / sensitivity;
-
-    // Clamp
     y = Math.max(minY, Math.min(maxY, y));
     modwheel.setAttribute("y", y);
   }
 
-  function endDrag() {
-    isDragging = false;
-  }
+  // Desktop
+  modwheel.addEventListener("mousedown", e => {
+    e.preventDefault();
+    isDragging = true;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    startY = cursor.y;
+    startWheelY = y;
+  });
 
-  // Mouse events
-  modwheel.addEventListener("mousedown", e => { startDrag(e.clientY); e.preventDefault(); });
-  document.addEventListener("mousemove", e => doDrag(e.clientY));
-  document.addEventListener("mouseup", endDrag);
+  document.addEventListener("mousemove", e => {
+    if (!isDragging) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    onMove(cursor.y);
+  });
 
-  // Touch events
-  modwheel.addEventListener("touchstart", e => { startDrag(e.touches[0].clientY); e.preventDefault(); });
-  document.addEventListener("touchmove", e => doDrag(e.touches[0].clientY));
-  document.addEventListener("touchend", endDrag);
+  document.addEventListener("mouseup", () => { isDragging = false; });
+
+  // Touch
+  modwheel.addEventListener("touchstart", e => {
+    e.preventDefault();
+    isDragging = true;
+    const pt = svg.createSVGPoint();
+    pt.x = e.touches[0].clientX; pt.y = e.touches[0].clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    startY = cursor.y;
+    startWheelY = y;
+  }, {passive:false});
+
+  document.addEventListener("touchmove", e => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const pt = svg.createSVGPoint();
+    pt.x = e.touches[0].clientX; pt.y = e.touches[0].clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    onMove(cursor.y);
+  }, {passive:false});
+
+  document.addEventListener("touchend", () => { isDragging = false; });
 }
 
 
