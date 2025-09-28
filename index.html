@@ -412,112 +412,159 @@ const typeToImage = {
   modwheel: 'data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4NCjwhRE9DVFlQRSBzdmcgUFVCTElDICItLy9XM0MvL0RURCBTVkcgMS4xLy9FTiIgImh0dHA6Ly93d3cudzMub3JnL0dyYXBoaWNzL1NWRy8xLjEvRFREL3N2ZzExLmR0ZCI+DQo8IS0tIENyZWF0b3I6IENvcmVsRFJBVyAoT0VNIFZlcnNpb24pIC0tPg0KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbDpzcGFjZT0icHJlc2VydmUiIHdpZHRoPSIxMDFweCIgaGVpZ2h0PSI2NHB4IiB2ZXJzaW9uPSIxLjEiIHN0eWxlPSJzaGFwZS1yZW5kZXJpbmc6Z2VvbWV0cmljUHJlY2lzaW9uOyB0ZXh0LXJlbmRlcmluZzpnZW9tZXRyaWNQcmVjaXNpb247IGltYWdlLXJlbmRlcmluZzpvcHRpbWl6ZVF1YWxpdHk7IGZpbGwtcnVsZTpldmVub2RkOyBjbGlwLXJ1bGU6ZXZlbm9kZCINCnZpZXdCb3g9IjAgMCAxMDEgNjQuMTQiDQogeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiDQogeG1sbnM6eG9kbT0iaHR0cDovL3d3dy5jb3JlbC5jb20vY29yZWxkcmF3L29kbS8yMDAzIj4NCiA8ZGVmcz4NCiAgPHN0eWxlIHR5cGU9InRleHQvY3NzIj4NCiAgIDwhW0NEQVRBWw0KICAgIC5zdHIxIHtzdHJva2U6IzM0MzAyRTtzdHJva2Utd2lkdGg6Mi44MTtzdHJva2UtbWl0ZXJsaW1pdDoyMi45MjU2fQ0KICAgIC5zdHIwIHtzdHJva2U6IzJCMkEyOTtzdHJva2Utd2lkdGg6Mi4zNjtzdHJva2UtbWl0ZXJsaW1pdDoyMi45MjU2fQ0KICAgIC5maWwwIHtmaWxsOiNENjE4MTh9DQogICBdXT4NCiAgPC9zdHlsZT4NCiA8L2RlZnM+DQogPGcgaWQ9IkxheWVyX3gwMDIwXzEiPg0KICA8bWV0YWRhdGEgaWQ9IkNvcmVsQ29ycElEXzBDb3JlbC1MYXllciIvPg0KICA8cmVjdCBjbGFzcz0iZmlsMCBzdHIwIiB4PSItMC41MSIgeT0iMC45MyIgd2lkdGg9IjEwMSIgaGVpZ2h0PSI2NC4xNCIvPg0KICA8cGF0aCBjbGFzcz0iZmlsMCBzdHIxIiBkPSJNNzUuNjMgMzMuMDFjMCwxNC4yIC0xMS41LDI1LjcyIC0yNS43LDI1LjcyIC0xNC4yLDAgLTI1LjcsLTExLjUyIC0yNS43LC0yNS43MiAwLC0xNC4yMSAxMS41LC0yNS43MyAyNS43LC0yNS43MyAxNC4yLDAgMjUuNywxMS41MiAyNS43LDI1LjczeiIvPg0KIDwvZz4NCjwvc3ZnPg0K'
 };
 
-    // Universal knob logic
-    function makeKnob(id, options={}) {
-      const knob = document.getElementById(id);
-      let isDragging = false;
-      let startY, startAngle;
-      let currentAngle = options.startAngle || 0;
-      const minAngle = options.minAngle ?? -150;
-      const maxAngle = options.maxAngle ?? 150;
-      const sensitivity = options.sensitivity ?? 0.75;
+    // Universal knob logic (mouse + touch)
+function makeKnob(id, options = {}) {
+  const knob = document.getElementById(id);
+  let isDragging = false;
+  let startY, startAngle;
+  let currentAngle = options.startAngle || 0;
+  const minAngle = options.minAngle ?? -150;
+  const maxAngle = options.maxAngle ?? 150;
+  const sensitivity = options.sensitivity ?? 0.75;
 
-      function getCenter() {
-        const knobX = parseFloat(knob.getAttribute("x"));
-        const knobY = parseFloat(knob.getAttribute("y"));
-        const knobW = parseFloat(knob.getAttribute("width"));
-        const knobH = parseFloat(knob.getAttribute("height"));
-        return { cx: knobX + knobW / 2, cy: knobY + knobH / 2 };
-      }
+  function getCenter() {
+    const knobX = parseFloat(knob.getAttribute("x"));
+    const knobY = parseFloat(knob.getAttribute("y"));
+    const knobW = parseFloat(knob.getAttribute("width"));
+    const knobH = parseFloat(knob.getAttribute("height"));
+    return { cx: knobX + knobW / 2, cy: knobY + knobH / 2 };
+  }
 
-      knob.addEventListener("mousedown", e => { isDragging = true; startY = e.clientY; startAngle = currentAngle; });
-      document.addEventListener("mouseup", () => { isDragging = false; });
-      document.addEventListener("mousemove", e => {
-        if (!isDragging) return;
-        const deltaY = startY - e.clientY;
-        currentAngle = startAngle + deltaY / sensitivity;
-        currentAngle = Math.max(minAngle, Math.min(maxAngle, currentAngle));
-        const { cx, cy } = getCenter();
-        knob.setAttribute("transform", `rotate(${currentAngle} ${cx} ${cy})`);
-      });
-    }
+  function startDrag(clientY) {
+    isDragging = true;
+    startY = clientY;
+    startAngle = currentAngle;
+  }
 
-    // Selector knob logic
-    function makeSelectorKnob(id, angles, options={}) {
-      const knob = document.getElementById(id);
-      let isDragging = false;
-      let startY, startIndex = 0;
-      const sensitivity = options.sensitivity ?? 20;
-      const defaultAngle = options.defaultAngle ?? angles[0];
+  function doDrag(clientY) {
+    if (!isDragging) return;
+    const deltaY = startY - clientY;
+    currentAngle = startAngle + deltaY / sensitivity;
+    currentAngle = Math.max(minAngle, Math.min(maxAngle, currentAngle));
+    const { cx, cy } = getCenter();
+    knob.setAttribute("transform", `rotate(${currentAngle} ${cx} ${cy})`);
+  }
 
-      function getCenter() {
-        const knobX = parseFloat(knob.getAttribute("x"));
-        const knobY = parseFloat(knob.getAttribute("y"));
-        const knobW = parseFloat(knob.getAttribute("width"));
-        const knobH = parseFloat(knob.getAttribute("height"));
-        return { cx: knobX + knobW / 2, cy: knobY + knobH / 2 };
-      }
+  function endDrag() {
+    isDragging = false;
+  }
 
-      startIndex = angles.indexOf(defaultAngle);
-      if (startIndex === -1) startIndex = 0;
-      const { cx, cy } = getCenter();
-      knob.setAttribute("transform", `rotate(${angles[startIndex]} ${cx} ${cy})`);
+  // Mouse events
+  knob.addEventListener("mousedown", e => startDrag(e.clientY));
+  document.addEventListener("mousemove", e => doDrag(e.clientY));
+  document.addEventListener("mouseup", endDrag);
 
-      knob.addEventListener("mousedown", e => {
-        isDragging = true; startY = e.clientY;
-        const transform = knob.getAttribute("transform");
-        const match = transform ? transform.match(/rotate\((-?\d+)/) : null;
-        const currentAngle = match ? parseFloat(match[1]) : angles[0];
-        startIndex = angles.reduce((prev,curr,i)=> Math.abs(curr-currentAngle)<Math.abs(angles[prev]-currentAngle)?i:prev,0);
-      });
-      document.addEventListener("mouseup", () => { isDragging = false; });
-      document.addEventListener("mousemove", e => {
-        if (!isDragging) return;
-        const deltaY = startY - e.clientY;
-        let step = Math.round(deltaY / sensitivity);
-        let index = startIndex + step;
-        index = Math.max(0, Math.min(angles.length-1, index));
-        const { cx, cy } = getCenter();
-        knob.setAttribute("transform", `rotate(${angles[index]} ${cx} ${cy})`);
-      });
-    }
+  // Touch events
+  knob.addEventListener("touchstart", e => startDrag(e.touches[0].clientY));
+  document.addEventListener("touchmove", e => doDrag(e.touches[0].clientY));
+  document.addEventListener("touchend", endDrag);
+}
 
-    // Fader logic
-    function makeFader(id, minY, maxY) {
+
+    // Selector knob logic (mouse + touch)
+function makeSelectorKnob(id, angles, options = {}) {
+  const knob = document.getElementById(id);
+  let isDragging = false;
+  let startY, startIndex = 0;
+  const sensitivity = options.sensitivity ?? 20;
+  const defaultAngle = options.defaultAngle ?? angles[0];
+
+  function getCenter() {
+    const knobX = parseFloat(knob.getAttribute("x"));
+    const knobY = parseFloat(knob.getAttribute("y"));
+    const knobW = parseFloat(knob.getAttribute("width"));
+    const knobH = parseFloat(knob.getAttribute("height"));
+    return { cx: knobX + knobW / 2, cy: knobY + knobH / 2 };
+  }
+
+  startIndex = angles.indexOf(defaultAngle);
+  if (startIndex === -1) startIndex = 0;
+  const { cx, cy } = getCenter();
+  knob.setAttribute("transform", `rotate(${angles[startIndex]} ${cx} ${cy})`);
+
+  function startDrag(clientY) {
+    isDragging = true;
+    startY = clientY;
+    const transform = knob.getAttribute("transform");
+    const match = transform ? transform.match(/rotate\((-?\d+)/) : null;
+    const currentAngle = match ? parseFloat(match[1]) : angles[0];
+    startIndex = angles.reduce((prev, curr, i) => 
+      Math.abs(curr - currentAngle) < Math.abs(angles[prev] - currentAngle) ? i : prev, 0);
+  }
+
+  function doDrag(clientY) {
+    if (!isDragging) return;
+    const deltaY = startY - clientY;
+    let step = Math.round(deltaY / sensitivity);
+    let index = startIndex + step;
+    index = Math.max(0, Math.min(angles.length - 1, index));
+    const { cx, cy } = getCenter();
+    knob.setAttribute("transform", `rotate(${angles[index]} ${cx} ${cy})`);
+  }
+
+  function endDrag() {
+    isDragging = false;
+  }
+
+  // Mouse events
+  knob.addEventListener("mousedown", e => startDrag(e.clientY));
+  document.addEventListener("mousemove", e => doDrag(e.clientY));
+  document.addEventListener("mouseup", endDrag);
+
+  // Touch events
+  knob.addEventListener("touchstart", e => startDrag(e.touches[0].clientY));
+  document.addEventListener("touchmove", e => doDrag(e.touches[0].clientY));
+  document.addEventListener("touchend", endDrag);
+}
+
+
+    // Fader logic (mouse + touch)
+function makeFader(id, minY, maxY) {
   const fader = document.getElementById(id);
   let isDragging = false;
   let startY, startFaderY;
   let y = (minY + maxY) / 2;
   fader.setAttribute("y", y);
 
-  fader.addEventListener("mousedown", e => {
+  function startDrag(clientY) {
     isDragging = true;
-    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const pt = svg.createSVGPoint(); pt.x = 0; pt.y = clientY;
     const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
     startY = cursor.y;
     startFaderY = y;
-    e.preventDefault();
-  });
+  }
 
-  document.addEventListener("mouseup", () => isDragging = false);
-
-  document.addEventListener("mousemove", e => {
+  function doDrag(clientY) {
     if (!isDragging) return;
-
-    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const pt = svg.createSVGPoint(); pt.x = 0; pt.y = clientY;
     const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
     let delta = cursor.y - startY;
 
     const sensitivity = 2; // smaller = faster, larger = slower
     y = startFaderY + delta / sensitivity;
 
-    // Clamp after applying delta
+    // Clamp
     y = Math.max(minY, Math.min(maxY, y));
     fader.setAttribute("y", y);
-  });
+  }
+
+  function endDrag() {
+    isDragging = false;
+  }
+
+  // Mouse events
+  fader.addEventListener("mousedown", e => { startDrag(e.clientY); e.preventDefault(); });
+  document.addEventListener("mousemove", e => doDrag(e.clientY));
+  document.addEventListener("mouseup", endDrag);
+
+  // Touch events
+  fader.addEventListener("touchstart", e => { startDrag(e.touches[0].clientY); e.preventDefault(); });
+  document.addEventListener("touchmove", e => doDrag(e.touches[0].clientY));
+  document.addEventListener("touchend", endDrag);
 }
+
 	
-	// Modwheel logic (same as fader, precise and responsive)
+	// Modwheel logic (mouse + touch)
 function makeModwheel(id, minY, maxY) {
   const modwheel = document.getElementById(id);
   let isDragging = false;
@@ -525,32 +572,43 @@ function makeModwheel(id, minY, maxY) {
   let y = (minY + maxY) / 2;
   modwheel.setAttribute("y", y);
 
-  modwheel.addEventListener("mousedown", e => {
+  function startDrag(clientY) {
     isDragging = true;
-    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const pt = svg.createSVGPoint(); pt.x = 0; pt.y = clientY;
     const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
     startY = cursor.y;
     startWheelY = y;
-    e.preventDefault();
-  });
+  }
 
-  document.addEventListener("mouseup", () => isDragging = false);
-
-  document.addEventListener("mousemove", e => {
+  function doDrag(clientY) {
     if (!isDragging) return;
-
-    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const pt = svg.createSVGPoint(); pt.x = 0; pt.y = clientY;
     const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
     let delta = cursor.y - startY;
 
     const sensitivity = 2; // smaller = faster, larger = slower
     y = startWheelY + delta / sensitivity;
 
-    // Clamp after applying delta
+    // Clamp
     y = Math.max(minY, Math.min(maxY, y));
     modwheel.setAttribute("y", y);
-  });
+  }
+
+  function endDrag() {
+    isDragging = false;
+  }
+
+  // Mouse events
+  modwheel.addEventListener("mousedown", e => { startDrag(e.clientY); e.preventDefault(); });
+  document.addEventListener("mousemove", e => doDrag(e.clientY));
+  document.addEventListener("mouseup", endDrag);
+
+  // Touch events
+  modwheel.addEventListener("touchstart", e => { startDrag(e.touches[0].clientY); e.preventDefault(); });
+  document.addEventListener("touchmove", e => doDrag(e.touches[0].clientY));
+  document.addEventListener("touchend", endDrag);
 }
+
 
 
     // Switch logic
