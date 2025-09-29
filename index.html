@@ -274,17 +274,29 @@ function createCable(p1, p2) {
   // Set visual appearance
   cable.setAttribute("stroke", color);
   cable.setAttribute("fill", "transparent");
-  cable.setAttribute("stroke-width", 2); // visual thickness
+  cable.setAttribute("stroke-width", 2);
   cable.setAttribute("stroke-linecap", "round");
-
-  // Make only the line clickable, not the bounding box
   cable.style.pointerEvents = "stroke";
 
-  // Calculate quadratic curve
-  const controlX = (p1.x + p2.x) / 2;
-  const arcHeight = 40;
-  const controlY = Math.min(p1.y, p2.y) - arcHeight;
-  const d = `M ${p1.x} ${p1.y} Q ${controlX} ${controlY} ${p2.x} ${p2.y}`;
+  // Determine if the cable is perfectly vertical (or nearly vertical)
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  let d;
+
+  if (Math.abs(dx) < 1) { // vertical cable
+    const offsetX = 15; // horizontal arc amount (to the right)
+    const midY = (p1.y + p2.y) / 2;
+    d = `M ${p1.x} ${p1.y} 
+         Q ${p1.x + offsetX} ${p1.y} ${p1.x + offsetX} ${midY} 
+         Q ${p1.x + offsetX} ${p2.y} ${p2.x} ${p2.y}`;
+  } else {
+    // regular upward arc
+    const controlX = (p1.x + p2.x) / 2;
+    const arcHeight = 40;
+    const controlY = Math.min(p1.y, p2.y) - arcHeight;
+    d = `M ${p1.x} ${p1.y} Q ${controlX} ${controlY} ${p2.x} ${p2.y}`;
+  }
+
   cable.setAttribute("d", d);
 
   // Add to SVG and cables array
@@ -298,6 +310,7 @@ function createCable(p1, p2) {
     if (index > -1) cables.splice(index, 1);
   });
 }
+
 
 // Render patch points
 patchPoints.forEach(p => {
