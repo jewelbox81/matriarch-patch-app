@@ -172,8 +172,8 @@ const svg = document.getElementById("synth-panel");
 	// Odd4
 	  { id: 'noise-in', x: 352.3, y: 103.7, type: 'input' },
 	  { id: 'mix-out', x: 393.35, y: 103.7, type: 'output' },
-	  { id: 'noise-in', x: 651.5, y: 103.7, type: 'input' },
-	  { id: 'noise-in', x: 692.6, y: 103.7, type: 'input' },
+	  { id: 'fbcv-in', x: 651.5, y: 103.7, type: 'input' },
+	  { id: 'mix-in', x: 692.6, y: 103.7, type: 'input' },
 	  
 	// 2nd row top
 	  { id: 'vel-out', x: 89.2, y: 110.5, type: 'output' },
@@ -197,9 +197,9 @@ const svg = document.getElementById("synth-panel");
 	  { id: 'osc3-in', x: 366, y: 110.5, type: 'input' },
 	  { id: 'osc4-in', x: 379.7, y: 110.5, type: 'input' },
 	  
-	  { id: 'linfm3-in', x: 423.5, y: 110.5, type: 'input' },
-      { id: 'pwm4-in', x: 445.4, y: 110.5, type: 'input' },
-      { id: 'linfm4-in', x: 467.3, y: 110.5, type: 'input' }, 
+	  { id: 'cutoff1-in', x: 423.5, y: 110.5, type: 'input' },
+      { id: 'cutoff2-in', x: 445.4, y: 110.5, type: 'input' },
+      { id: 'envamt-in', x: 467.3, y: 110.5, type: 'input' }, 
 	  
 	  { id: 'mult7', x: 497.5, y: 110.5, type: 'mult' },
       { id: 'mult8', x: 511.2, y: 110.5, type: 'mult' },
@@ -252,45 +252,133 @@ const svg = document.getElementById("synth-panel");
    
     ];
 
-// --- Cable logic ---
+// --- Cable logic with configurable colors + color pulsing ---
 let startPoint = null;
+let selectedPointEl = null;
 const cables = [];
 const cableColors = ["#c52626","#328539","#202f91","#d18500","#7741c4","#0fa3ba","#f23d61","#3d4700","#9c0374","#ff6f00"];
 let cableCounter = 0;
 
-function onPatchPointClick(point) {
-  if (!startPoint) { startPoint = point; return; }
-  if (startPoint.id === point.id) { startPoint = null; return; }
-  if (startPoint.type === point.type && startPoint.type !== "mult") { startPoint = null; return; }
-  createCable(startPoint, point);
-  startPoint = null;
+// Configurable highlight colors for each patch point type
+const highlightColors = {
+  input: { selected: "#d61818", eligible: "#ffb58d" },
+  output: { selected: "#d61818", eligible: "#7ff0ca" },
+  mult: { selected: "#d61818", eligible: "#8f9bec" }
+};
+
+// Map of pulsing elements and their intervals
+const pulseMap = new Map();
+
+// Utility: brighten hex color by a percentage
+function brightenHex(hex, percent) {
+  const num = parseInt(hex.slice(1),16);
+  let r = (num >> 16) + Math.round(255 * percent/100);
+  let g = ((num >> 8) & 0xFF) + Math.round(255 * percent/100);
+  let b = (num & 0xFF) + Math.round(255 * percent/100);
+  r = Math.min(255, r); g = Math.min(255, g); b = Math.min(255, b);
+  return `rgb(${r},${g},${b})`;
 }
 
+// Start pulsing color for a patch point
+function startPulse(el, baseColor) {
+  let step = 0;
+  const interval = setInterval(() => {
+    const factor = Math.sin(step) * 18; // oscillate +/-10%
+    el.setAttribute('fill', brightenHex(baseColor, factor));
+    step += 0.2;
+  }, 42);
+  pulseMap.set(el, interval);
+}
+
+// Stop pulsing
+function stopPulse(el, baseColor) {
+  if (pulseMap.has(el)) {
+    clearInterval(pulseMap.get(el));
+    pulseMap.delete(el);
+  }
+  el.setAttribute('fill', baseColor);
+}
+
+// Handle patch point clicks
+function onPatchPointClick(point) {
+  // Reset previous highlights and stop pulses
+  if (selectedPointEl) {
+    const resetColor = startPoint.type === 'input' ? '#ffc7a9' : startPoint.type === 'output' ? '#afe0d0' : '#b5bad9';
+    selectedPointEl.setAttribute('fill', resetColor);
+
+    patchPoints.forEach(p => {
+      const el = document.getElementById(p.id);
+      const baseColor = p.type === 'input' ? '#ffc7a9' : p.type === 'output' ? '#afe0d0' : '#b5bad9';
+      stopPulse(el, baseColor);
+    });
+
+    selectedPointEl = null;
+  }
+
+  // First click: select starting point
+if (!startPoint) {
+  startPoint = point;
+
+  // Highlight selected point
+  selectedPointEl = document.getElementById(point.id);
+  selectedPointEl.setAttribute('fill', highlightColors[point.type].selected);
+
+  // Highlight eligible destinations and pulse them
+  patchPoints.forEach(p => {
+    const el = document.getElementById(p.id);
+    if (p.id !== point.id && (p.type !== point.type || p.type === 'mult')) {
+      const base = highlightColors[p.type].eligible;
+      startPulse(el, base);
+    } else if (p.id !== point.id) {
+      // Ineligible points → grey
+      stopPulse(el, "#d9d9d9"); // remove any previous pulse
+      el.setAttribute('fill', "#cbcbcb");
+    }
+  });
+
+  return;
+}
+
+
+  // Cancel if same point or same type (non-mult)
+  if (startPoint.id === point.id || (startPoint.type === point.type && startPoint.type !== 'mult')) {
+    startPoint = null;
+    return;
+  }
+
+  // Create cable
+  createCable(startPoint, point);
+
+  // Reset highlights and stop pulses
+  startPoint = null;
+  selectedPointEl = null;
+  patchPoints.forEach(p => {
+    const el = document.getElementById(p.id);
+    const baseColor = p.type === 'input' ? '#ffc7a9' : p.type === 'output' ? '#afe0d0' : '#b5bad9';
+    stopPulse(el, baseColor);
+  });
+}
+
+// Function to create a cable
 function createCable(p1, p2) {
   const cable = document.createElementNS("http://www.w3.org/2000/svg", "path");
   const color = cableColors[cableCounter % cableColors.length];
   cableCounter++;
 
-  // Set visual appearance
   cable.setAttribute("stroke", color);
   cable.setAttribute("fill", "transparent");
   cable.setAttribute("stroke-width", 2);
   cable.setAttribute("stroke-linecap", "round");
   cable.style.pointerEvents = "stroke";
 
-  // Determine if the cable is perfectly vertical (or nearly vertical)
   const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
   let d;
 
   if (Math.abs(dx) < 1) { // vertical cable
-    const offsetX = 15; // horizontal arc amount (to the right)
+    const offsetX = 15;
     const midY = (p1.y + p2.y) / 2;
-    d = `M ${p1.x} ${p1.y} 
-         Q ${p1.x + offsetX} ${p1.y} ${p1.x + offsetX} ${midY} 
-         Q ${p1.x + offsetX} ${p2.y} ${p2.x} ${p2.y}`;
+    d = `M ${p1.x} ${p1.y} Q ${p1.x + offsetX} ${p1.y} ${p1.x + offsetX} ${midY} Q ${p1.x + offsetX} ${p2.y} ${p2.x} ${p2.y}`;
   } else {
-    // regular upward arc
     const controlX = (p1.x + p2.x) / 2;
     const arcHeight = 40;
     const controlY = Math.min(p1.y, p2.y) - arcHeight;
@@ -298,8 +386,6 @@ function createCable(p1, p2) {
   }
 
   cable.setAttribute("d", d);
-
-  // Add to SVG and cables array
   svg.appendChild(cable);
   cables.push({ from: p1.id, to: p2.id, color, d });
 
