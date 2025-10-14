@@ -153,25 +153,6 @@
       </div>
     </div>
 
-<div id="hue-slider-container" style="
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 5px;
-  margin-top: 6px;
-  padding-right: 10px;
-">
-  <label for="hue-slider" style="font-size: 18px; color: #000;">Control Colour</label>
-  <input
-    type="range"
-    id="hue-slider"
-    min="0"
-    max="360"
-    value="0"
-    style="width: 180px;"
-  >
-</div>
-
 
     <!-- Patch Notes -->
     <div style="display: flex; flex-direction: column; width: 100%;">
@@ -191,6 +172,26 @@
     <img src="https://storage.ko-fi.com/cdn/cup-border.png" 
          alt="Ko-fi logo" style="height:19px; display:block; margin:0; transform: translateY(1px); transform: translateX(3px);">
   </a>
+  
+</div>
+<div id="hue-slider-container" style="
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  margin-top: 0px;
+  padding-right: 0px;
+">
+  <label for="hue-slider" style="font-family:'Bahnschrift', sans-serif; font-weight:350; font-stretch:condensed; font-size:14px; line-height:1; color: #000;">Control Colour</label>
+  <input
+    type="range"
+    id="hue-slider"
+    min="0"
+    max="360"
+    value="0"
+    style="width: 50px;"
+  >
+  <button id="toggle-cable-color">Toggle Cable Colour</button>
 </div>
 
 
@@ -1281,6 +1282,15 @@ window.addEventListener('load', () => {
     hueSlider.value = saved;
   }
 });
+let cablesAreBlack = false; // current state
+
+document.getElementById('toggle-cable-color').addEventListener('click', () => {
+  cablesAreBlack = !cablesAreBlack;
+  cables.forEach(c => {
+    c.cableEl.setAttribute('stroke', cablesAreBlack ? '#000' : c.color);
+  });
+});
+
 
 
 </script>
