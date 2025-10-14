@@ -75,7 +75,64 @@
 #overlay {
   transition: opacity 0.3s ease;
 }
+/* Only recolour the control graphics */
+.control {
+  filter: hue-rotate(var(--hue, 0deg));
+  transition: filter 0.2s linear;
+}
 
+/* Optional: style the slider area */
+#colour-controls {
+  position: fixed;
+  bottom: 20px;
+  left: 37px;
+  padding: 6px 10px;
+  border-radius: 2px;
+  color: black;
+  font-family: 'Bahnschrift', sans-serif;
+  font-size: 18px;
+}
+
+#hue-slider {
+  -webkit-appearance: none;  /* remove default styling */
+  width: 180px;
+  height: 6px;
+  border-radius: 3px;
+  background: #ddd;  /* track color */
+  outline: none;
+}
+
+/* Chrome, Safari, Edge */
+#hue-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #666;  /* thumb color */
+  border: 1px solid #000;
+  cursor: pointer;
+}
+
+/* Firefox */
+#hue-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #666;
+  border: 1px solid #000;
+  cursor: pointer;
+}
+
+/* IE */
+#hue-slider::-ms-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #666;
+  border: 1px solid #000;
+  cursor: pointer;
+}
 
 
   </style>
@@ -96,16 +153,36 @@
       </div>
     </div>
 
+<div id="hue-slider-container" style="
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding-right: 10px;
+">
+  <label for="hue-slider" style="font-size: 18px; color: #000;">Control Colour</label>
+  <input
+    type="range"
+    id="hue-slider"
+    min="0"
+    max="360"
+    value="0"
+    style="width: 180px;"
+  >
+</div>
+
+
     <!-- Patch Notes -->
     <div style="display: flex; flex-direction: column; width: 100%;">
       <label for="patch-notes">Patch Notes:</label>
-      <textarea id="patch-notes" rows="5" style="width: 100%;"></textarea>
+      <textarea id="patch-notes" rows="5" style="width: 99.9%;"></textarea>
     </div>
 
 <!-- Ko-fi line with logo nudged down -->
 <div style="display:flex; align-items:center; gap:3px; margin:0; padding:0; line-height:1;">
   <span style="font-family:'Bahnschrift', sans-serif; font-weight:350; font-stretch:condensed; font-size:14px; line-height:1;">
-    ©2025 Criskcracker - Support me with Ko-fi if you like :) →
+    ©2025 Criskcracker - If you like the app, support me :) →
   </span>
   <a href="https://ko-fi.com/jewelbox81" target="_blank"
      style="display:inline-flex; align-items:center; justify-content:center;
@@ -129,6 +206,7 @@
 
     <input type="file" id="recall-file" style="display:none" accept=".json"/>
   </div>
+  
 
 <script>
 const svg = document.getElementById("synth-panel");
@@ -368,38 +446,184 @@ if (!startPoint) {
 
 // Function to create a cable
 function createCable(p1, p2) {
-  const cable = document.createElementNS("http://www.w3.org/2000/svg", "path");
   const color = cableColors[cableCounter % cableColors.length];
   cableCounter++;
 
+  const cable = document.createElementNS("http://www.w3.org/2000/svg", "path");
   cable.setAttribute("stroke", color);
   cable.setAttribute("fill", "transparent");
-  cable.setAttribute("stroke-width", 2);
+  cable.setAttribute("stroke-width", 2.3);
   cable.setAttribute("stroke-linecap", "round");
   cable.style.pointerEvents = "stroke";
+  svg.appendChild(cable);
 
   const dx = p2.x - p1.x;
-  let d;
+  let isVertical = Math.abs(dx) < 1;
 
-  if (Math.abs(dx) < 1) { // vertical cable
-    const offsetX = 15;
-    const midY = (p1.y + p2.y) / 2;
-    d = `M ${p1.x} ${p1.y} Q ${p1.x + offsetX} ${p1.y} ${p1.x + offsetX} ${midY} Q ${p1.x + offsetX} ${p2.y} ${p2.x} ${p2.y}`;
-  } else {
-    const controlX = (p1.x + p2.x) / 2;
-    const arcHeight = 40;
-    const controlY = Math.min(p1.y, p2.y) - arcHeight;
-    d = `M ${p1.x} ${p1.y} Q ${controlX} ${controlY} ${p2.x} ${p2.y}`;
+  // --- Helper to create handle element ---
+  function createHandle(x, y) {
+    const handleEl = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    handleEl.setAttribute("r", 1.8);
+    handleEl.setAttribute("fill", "rgba(180,180,180,0.5)");
+    handleEl.setAttribute("stroke", "rgba(120,120,120,0.7)");
+    handleEl.setAttribute("stroke-width", 0.6);
+    handleEl.style.cursor = "grab";
+    handleEl.setAttribute("cx", x);
+    handleEl.setAttribute("cy", y);
+    svg.appendChild(handleEl);
+    return handleEl;
   }
 
-  cable.setAttribute("d", d);
-  svg.appendChild(cable);
-  cables.push({ from: p1.id, to: p2.id, color, d });
+  // --- Vertical cable: double-Q path ---
+  if (isVertical) {
+    const offsetX = 15;
+    let handle = { x: p1.x + offsetX, y: (p1.y + p2.y) / 2 };
 
-  // Double-click removes cable
+    function updatePath() {
+      const midY = handle.y;
+      const d = `M ${p1.x} ${p1.y} Q ${handle.x} ${p1.y} ${handle.x} ${midY} Q ${handle.x} ${p2.y} ${p2.x} ${p2.y}`;
+      cable.setAttribute("d", d);
+    }
+    updatePath();
+
+    const handleEl = createHandle(handle.x, handle.y);
+    let isDragging = false;
+    let dragOffset = { x: 0, y: 0 };
+
+    handleEl.addEventListener("mousedown", e => {
+      e.preventDefault();
+      isDragging = true;
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX; pt.y = e.clientY;
+      const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+      dragOffset.x = handle.x - cursor.x;
+      dragOffset.y = handle.y - cursor.y;
+    });
+
+    function dragMove(cursor) {
+      handle.x = cursor.x + dragOffset.x;
+      handle.y = cursor.y + dragOffset.y;
+      updatePath();
+      handleEl.setAttribute("cx", handle.x);
+      handleEl.setAttribute("cy", handle.y);
+    }
+
+    document.addEventListener("mousemove", e => {
+      if (!isDragging) return;
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX; pt.y = e.clientY;
+      const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+      dragMove(cursor);
+    });
+    document.addEventListener("mouseup", () => isDragging = false);
+
+    handleEl.addEventListener("touchstart", e => {
+      e.preventDefault();
+      isDragging = true;
+      const pt = svg.createSVGPoint();
+      pt.x = e.touches[0].clientX; pt.y = e.touches[0].clientY;
+      const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+      dragOffset.x = handle.x - cursor.x;
+      dragOffset.y = handle.y - cursor.y;
+    }, { passive: false });
+
+    document.addEventListener("touchmove", e => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const pt = svg.createSVGPoint();
+      pt.x = e.touches[0].clientX; pt.y = e.touches[0].clientY;
+      const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+      dragMove(cursor);
+    }, { passive: false });
+    document.addEventListener("touchend", () => isDragging = false);
+
+    cables.push({ from: p1.id, to: p2.id, color, cableEl: cable, handleEl, isVertical: true });
+
+    cable.addEventListener("dblclick", () => {
+      cable.remove();
+      handleEl.remove();
+      const index = cables.findIndex(c => c.cableEl === cable);
+      if (index > -1) cables.splice(index, 1);
+    });
+
+    return;
+  }
+
+  // --- Regular arced cable ---
+  const control = { x: (p1.x + p2.x)/2, y: Math.min(p1.y, p2.y) - 40 };
+
+  function pointOnCurve(t) {
+    const x = (1 - t) ** 2 * p1.x + 2 * (1 - t) * t * control.x + t ** 2 * p2.x;
+    const y = (1 - t) ** 2 * p1.y + 2 * (1 - t) * t * control.y + t ** 2 * p2.y;
+    return { x, y };
+  }
+
+  let handle = pointOnCurve(0.5);
+
+  function updatePath() {
+    const d = `M ${p1.x} ${p1.y} Q ${control.x} ${control.y} ${p2.x} ${p2.y}`;
+    cable.setAttribute("d", d);
+  }
+  updatePath();
+
+  const handleEl = createHandle(handle.x, handle.y);
+  let isDragging = false;
+  let dragOffset = { x: 0, y: 0 };
+
+  handleEl.addEventListener("mousedown", e => {
+    e.preventDefault();
+    isDragging = true;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    dragOffset.x = control.x - cursor.x;
+    dragOffset.y = control.y - cursor.y;
+  });
+
+  function dragMove(cursor) {
+    control.x = cursor.x + dragOffset.x;
+    control.y = cursor.y + dragOffset.y;
+    updatePath();
+    handle = pointOnCurve(0.5);
+    handleEl.setAttribute("cx", handle.x);
+    handleEl.setAttribute("cy", handle.y);
+  }
+
+  document.addEventListener("mousemove", e => {
+    if (!isDragging) return;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    dragMove(cursor);
+  });
+  document.addEventListener("mouseup", () => isDragging = false);
+
+  handleEl.addEventListener("touchstart", e => {
+    e.preventDefault();
+    isDragging = true;
+    const pt = svg.createSVGPoint();
+    pt.x = e.touches[0].clientX; pt.y = e.touches[0].clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    dragOffset.x = control.x - cursor.x;
+    dragOffset.y = control.y - cursor.y;
+  }, { passive: false });
+
+  document.addEventListener("touchmove", e => {
+    if (!isDragging) return;
+    e.preventDefault();
+    const pt = svg.createSVGPoint();
+    pt.x = e.touches[0].clientX; pt.y = e.touches[0].clientY;
+    const cursor = pt.matrixTransform(svg.getScreenCTM().inverse());
+    dragMove(cursor);
+  }, { passive: false });
+  document.addEventListener("touchend", () => (isDragging = false));
+
+  cables.push({ from: p1.id, to: p2.id, color, cableEl: cable, handleEl, control, isVertical: false });
+
   cable.addEventListener("dblclick", () => {
     cable.remove();
-    const index = cables.findIndex(c => c.d === d && c.from === p1.id && c.to === p2.id);
+    handleEl.remove();
+    const index = cables.findIndex(c => c.cableEl === cable);
     if (index > -1) cables.splice(index, 1);
   });
 }
@@ -822,6 +1046,7 @@ controls.forEach(ctrl => {
   img.setAttribute("y", ctrl.y);
   img.setAttribute("width", ctrl.w);
   img.setAttribute("height", ctrl.h);
+  img.setAttribute("class", "control");
   svg.appendChild(img);
 
   switch(ctrl.type){
@@ -1033,6 +1258,27 @@ overlay.addEventListener('click', (event) => {
   } else {
     // show fully
     overlay.style.opacity = "1";
+  }
+});
+const hueSlider = document.getElementById('hue-slider');
+
+// update hue rotation
+hueSlider.addEventListener('input', e => {
+  const hue = e.target.value;
+  document.documentElement.style.setProperty('--hue', `${hue}deg`);
+});
+
+// optional: save the hue for next session
+hueSlider.addEventListener('change', e => {
+  localStorage.setItem('matriarchHue', e.target.value);
+});
+
+// on page load, restore last used hue
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('matriarchHue');
+  if (saved) {
+    document.documentElement.style.setProperty('--hue', `${saved}deg`);
+    hueSlider.value = saved;
   }
 });
 
