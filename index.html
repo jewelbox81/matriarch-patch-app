@@ -1279,6 +1279,7 @@ window.addEventListener('load', () => {
   if (saved) {
     document.querySelectorAll('.control').forEach(el => {
       el.style.filter = `hue-rotate(${saved}deg)`;
+      void el.offsetHeight;
     });
     hueSlider.value = saved;
   }
