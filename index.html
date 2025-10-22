@@ -77,7 +77,6 @@
 }
 /* Only recolour the control graphics */
 .control {
-  filter: hue-rotate(var(--hue, 0deg));
   transition: filter 0.2s linear;
 }
 
@@ -1263,22 +1262,23 @@ overlay.addEventListener('click', (event) => {
 });
 const hueSlider = document.getElementById('hue-slider');
 
-// update hue rotation
 hueSlider.addEventListener('input', e => {
   const hue = e.target.value;
-  document.documentElement.style.setProperty('--hue', `${hue}deg`);
+  document.querySelectorAll('.control').forEach(el => {
+    el.style.filter = `hue-rotate(${hue}deg)`;
+  });
 });
 
-// optional: save the hue for next session
 hueSlider.addEventListener('change', e => {
   localStorage.setItem('matriarchHue', e.target.value);
 });
 
-// on page load, restore last used hue
 window.addEventListener('load', () => {
   const saved = localStorage.getItem('matriarchHue');
   if (saved) {
-    document.documentElement.style.setProperty('--hue', `${saved}deg`);
+    document.querySelectorAll('.control').forEach(el => {
+      el.style.filter = `hue-rotate(${saved}deg)`;
+    });
     hueSlider.value = saved;
   }
 });
