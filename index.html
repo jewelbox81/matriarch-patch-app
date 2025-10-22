@@ -77,8 +77,9 @@
 }
 /* Only recolour the control graphics */
 .control {
-  transition: filter 0.2s linear;
+  filter: hue-rotate(var(--hue, 0deg));
   will-change: filter;
+  transition: filter 0.2s linear;
 }
 
 /* Optional: style the slider area */
@@ -1263,24 +1264,23 @@ overlay.addEventListener('click', (event) => {
 });
 const hueSlider = document.getElementById('hue-slider');
 
+// Update hue on slider move
 hueSlider.addEventListener('input', e => {
   const hue = e.target.value;
-  document.querySelectorAll('.control').forEach(el => {
-    el.style.filter = `hue-rotate(${hue}deg)`;
-  });
+  // Set CSS variable on the root element
+  document.documentElement.style.setProperty('--hue', `${hue}deg`);
 });
 
+// Save hue value when slider is released
 hueSlider.addEventListener('change', e => {
   localStorage.setItem('matriarchHue', e.target.value);
 });
 
+// Restore saved hue on page load
 window.addEventListener('load', () => {
   const saved = localStorage.getItem('matriarchHue');
   if (saved) {
-    document.querySelectorAll('.control').forEach(el => {
-      el.style.filter = `hue-rotate(${saved}deg)`;
-      void el.offsetHeight;
-    });
+    document.documentElement.style.setProperty('--hue', `${saved}deg`);
     hueSlider.value = saved;
   }
 });
