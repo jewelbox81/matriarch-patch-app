@@ -1189,9 +1189,7 @@ recallFileInput.addEventListener('change', (event) => {
   };
   reader.readAsText(file);
 });
-</script>
 
-<script>
 document.getElementById('export-png').addEventListener('click', () => {
   const svgEl = document.getElementById('synth-panel');
   const patchNameInput = document.getElementById('patch-name'); // your Patch Name input
@@ -1219,23 +1217,50 @@ document.getElementById('export-png').addEventListener('click', () => {
 
   const svgData = serializer.serializeToString(svgClone);
   const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
-  const url = URL.createObjectURL(svgBlob);
+// --- Robust Fix 3 for Safari/iOS ---
 
+const reader = new FileReader(); // convert SVG blob to data URL
+
+reader.onload = () => {
   const img = new Image();
-  img.onload = () => {
-    ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
-    URL.revokeObjectURL(url);
+  img.decoding = 'sync';
+  img.style.position = 'fixed';
+  img.style.left = '-9999px';
+  img.style.top = '-9999px';
+  img.width = canvasWidth;
+  img.height = canvasHeight;
+  document.body.appendChild(img);
 
-    // Export PNG
-    canvas.toBlob((blob) => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }, 'image/png');
+  img.onload = async () => {
+    try {
+      if (img.decode) await img.decode(); // ensure fully decoded
+    } catch (e) {
+      // ignore errors
+    }
+
+    // Small delay to let Safari/iOS finish compositing
+    setTimeout(() => {
+      ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+
+      // Clean up
+      document.body.removeChild(img);
+
+      // Export PNG
+      canvas.toBlob((blob) => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }, 'image/png');
+    }, 50); // 50ms delay; tweak 10-200ms if needed
   };
-  img.src = url;
+
+  img.src = reader.result; // feed data URL to image
+};
+
+reader.readAsDataURL(svgBlob); // start FileReader
+
 });
 const overlay = document.getElementById('overlay');
 
@@ -1295,4 +1320,5 @@ document.getElementById('toggle-cable-color').addEventListener('click', () => {
 
 </body>
 </html>
+
 
