@@ -426,13 +426,6 @@ if (!startPoint) {
   return;
 }
 
-
-  // Cancel if same point or same type (non-mult)
-  if (startPoint.id === point.id || (startPoint.type === point.type && startPoint.type !== 'mult')) {
-    startPoint = null;
-    return;
-  }
-
   // Create cable
   createCable(startPoint, point);
 
@@ -1302,3 +1295,4 @@ document.getElementById('toggle-cable-color').addEventListener('click', () => {
 
 </body>
 </html>
+
