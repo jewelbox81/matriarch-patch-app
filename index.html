@@ -1281,7 +1281,7 @@ recallFileInput.addEventListener('change', (event) => {
           cable.setAttribute("d", c.d);
           cable.setAttribute("stroke", c.color);
           cable.setAttribute("fill", "transparent");
-          cable.setAttribute("stroke-width", 2);
+          cable.setAttribute("stroke-width", 2.5);
           cable.setAttribute("stroke-linecap", "round");
 
           // Only the line is clickable
@@ -1519,14 +1519,7 @@ window.addEventListener('load', () => {
     hueSlider.value = saved;
   }
 });
-let cablesAreBlack = false; // current state
 
-document.getElementById('toggle-cable-color').addEventListener('click', () => {
-  cablesAreBlack = !cablesAreBlack;
-  cables.forEach(c => {
-    c.cableEl.setAttribute('stroke', cablesAreBlack ? '#000' : c.color);
-  });
-});
 
 
 
