@@ -523,22 +523,6 @@ function stopPulse(el, baseColor) {
 }
 
 function onPatchPointClick(point) {
-  // If clicking the already selected start point → cancel
-  if (startPoint === point) {
-    // Reset highlight and stop pulses
-    const baseColor = point.type === 'input' ? '#ffc7a9' : point.type === 'output' ? '#afe0d0' : '#b5bad9';
-    selectedPointEl.setAttribute('fill', baseColor);
-    patchPoints.forEach(p => {
-      const el = document.getElementById(p.id);
-      const pBaseColor = p.type === 'input' ? '#ffc7a9' : p.type === 'output' ? '#afe0d0' : '#b5bad9';
-      stopPulse(el, pBaseColor);
-    });
-
-    startPoint = null;
-    selectedPointEl = null;
-    return;
-  }
-
   // Reset previous highlights and stop pulses
   if (selectedPointEl) {
     const resetColor = startPoint.type === 'input' ? '#ffc7a9' : startPoint.type === 'output' ? '#afe0d0' : '#b5bad9';
@@ -553,13 +537,14 @@ function onPatchPointClick(point) {
     selectedPointEl = null;
   }
 
-  // If no start point yet, select this point
+  // First click: select starting point
   if (!startPoint) {
     startPoint = point;
+    // Highlight selected point
     selectedPointEl = document.getElementById(point.id);
     selectedPointEl.setAttribute('fill', highlightColors[point.type].selected);
 
-    // Highlight eligible destinations (exclude self)
+    // Highlight eligible destinations and pulse them
     patchPoints.forEach(p => {
       const el = document.getElementById(p.id);
       if (p.id !== point.id && (p.type !== point.type || p.type === 'mult')) {
@@ -575,10 +560,7 @@ function onPatchPointClick(point) {
     return;
   }
 
-  // Prevent self-patching
-  if (startPoint === point) return;
-
-  // Create cable
+  // Second click: create cable
   createCable(startPoint, point);
 
   // Reset highlights and stop pulses
@@ -590,6 +572,7 @@ function onPatchPointClick(point) {
     stopPulse(el, baseColor);
   });
 }
+
 
 
 // Function to create a cable
