@@ -196,7 +196,7 @@
     style="width: 50px;"
   >
   <span style="font-family:'Bahnschrift', sans-serif; font-weight:350; font-stretch:condensed; font-size:14px; line-height:1;">
-         Pick The Next Cable Colour →</span>
+         Cable Colour</span>
 	<button id="colorPickerButton" style="width:24px; height:24px; border:none; border-radius:50%; cursor:pointer; background:#000000;"></button>
 
 </div>
@@ -412,11 +412,31 @@ const svg = document.getElementById("synth-panel");
       { id: 'eu-out-r', x: 571.25, y: 47.45, type: 'output' },	  
       { id: 'eu-out-l', x: 582, y: 47.45, type: 'output' },  
     ];
+	
+	// --- Convert old fader values to new system ---
+function adjustFaderPositions(patchData) {
+  const oldMin = 0;    // Old fader min
+  const oldMax = 100;  // Old fader max
+  const newMin = 0;    // New fader min after fix
+  const newMax = 120;  // New fader max after fix
+
+  if (patchData.controls && patchData.controls.faders) {
+    patchData.controls.faders.forEach(fader => {
+      if (fader.value !== undefined) {
+        fader.value = ((fader.value - oldMin) / (oldMax - oldMin)) * (newMax - newMin) + newMin;
+      }
+    });
+  }
+
+  return patchData;
+}
+
 
 // --- Cable logic with configurable colors + color pulsing ---
 let startPoint = null;
 let selectedPointEl = null;
 const cables = [];
+let selectedCables = [];
 // --- Active cable color ---
 let activeCableColor = "#000000";
 
@@ -444,8 +464,19 @@ const pickr = Pickr.create({
 
 
 pickr.on('change', (color, instance) => {
-    activeCableColor = color.toHEXA().toString();
-    pickr.setColor(activeCableColor); // optional, keeps the pickr preview in sync
+  const newColor = color.toHEXA().toString();
+  pickr.setColor(newColor);
+
+  if (selectedCables.length > 0) {
+    selectedCables.forEach(c => {
+      c.color = newColor; // update tracked color
+      c.cableEl.setAttribute("stroke", newColor);
+      // Keep translucent if selected
+      c.cableEl.setAttribute("stroke-opacity", 0.5);
+    });
+  } else {
+    activeCableColor = newColor; // color for new cables
+  }
 });
 
 
@@ -490,8 +521,23 @@ function stopPulse(el, baseColor) {
   el.setAttribute('fill', baseColor);
 }
 
-// Handle patch point clicks
 function onPatchPointClick(point) {
+  // If clicking the already selected start point → cancel
+  if (startPoint === point) {
+    // Reset highlight and stop pulses
+    const baseColor = point.type === 'input' ? '#ffc7a9' : point.type === 'output' ? '#afe0d0' : '#b5bad9';
+    selectedPointEl.setAttribute('fill', baseColor);
+    patchPoints.forEach(p => {
+      const el = document.getElementById(p.id);
+      const pBaseColor = p.type === 'input' ? '#ffc7a9' : p.type === 'output' ? '#afe0d0' : '#b5bad9';
+      stopPulse(el, pBaseColor);
+    });
+
+    startPoint = null;
+    selectedPointEl = null;
+    return;
+  }
+
   // Reset previous highlights and stop pulses
   if (selectedPointEl) {
     const resetColor = startPoint.type === 'input' ? '#ffc7a9' : startPoint.type === 'output' ? '#afe0d0' : '#b5bad9';
@@ -506,29 +552,30 @@ function onPatchPointClick(point) {
     selectedPointEl = null;
   }
 
-  // First click: select starting point
-if (!startPoint) {
-  startPoint = point;
+  // If no start point yet, select this point
+  if (!startPoint) {
+    startPoint = point;
+    selectedPointEl = document.getElementById(point.id);
+    selectedPointEl.setAttribute('fill', highlightColors[point.type].selected);
 
-  // Highlight selected point
-  selectedPointEl = document.getElementById(point.id);
-  selectedPointEl.setAttribute('fill', highlightColors[point.type].selected);
+    // Highlight eligible destinations (exclude self)
+    patchPoints.forEach(p => {
+      const el = document.getElementById(p.id);
+      if (p.id !== point.id && (p.type !== point.type || p.type === 'mult')) {
+        const base = highlightColors[p.type].eligible;
+        startPulse(el, base);
+      } else if (p.id !== point.id) {
+        // Ineligible points → grey
+        stopPulse(el, "#d9d9d9");
+        el.setAttribute('fill', "#cbcbcb");
+      }
+    });
 
-  // Highlight eligible destinations and pulse them
-  patchPoints.forEach(p => {
-    const el = document.getElementById(p.id);
-    if (p.id !== point.id && (p.type !== point.type || p.type === 'mult')) {
-      const base = highlightColors[p.type].eligible;
-      startPulse(el, base);
-    } else if (p.id !== point.id) {
-      // Ineligible points → grey
-      stopPulse(el, "#d9d9d9"); // remove any previous pulse
-      el.setAttribute('fill', "#cbcbcb");
-    }
-  });
+    return;
+  }
 
-  return;
-}
+  // Prevent self-patching
+  if (startPoint === point) return;
 
   // Create cable
   createCable(startPoint, point);
@@ -543,16 +590,63 @@ if (!startPoint) {
   });
 }
 
+
 // Function to create a cable
 function createCable(p1, p2) {
   const color = activeCableColor;
   const cable = document.createElementNS("http://www.w3.org/2000/svg", "path");
   cable.setAttribute("stroke", color);
   cable.setAttribute("fill", "transparent");
-  cable.setAttribute("stroke-width", 2.5);
+  cable.setAttribute("stroke-width", 2.4);
   cable.setAttribute("stroke-linecap", "round");
   cable.style.pointerEvents = "stroke";
   svg.appendChild(cable);
+
+// --- CLICK HANDLER TO SELECT THIS CABLE ---
+cable.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const isShift = e.shiftKey;
+  const currentStroke = cable.getAttribute("stroke");
+
+  if (isShift) {
+    // Shift + click → add/remove from selection
+    const index = selectedCables.findIndex(c => c.cableEl === cable);
+    if (index > -1) {
+      // Already selected → deselect
+      cable.setAttribute("stroke", selectedCables[index].color); // restore original color
+      cable.setAttribute("stroke-opacity", 1); // restore opacity
+      selectedCables.splice(index, 1);
+    } else {
+      // Add to selection
+      selectedCables.push({ cableEl: cable, color: currentStroke });
+      cable.setAttribute("stroke-opacity", 0.6); // highlight with translucency
+    }
+    return;
+  }
+
+  // No shift → single selection
+  if (selectedCables.length === 1 && selectedCables[0].cableEl === cable) {
+    // Clicking the only selected cable → deselect
+    cable.setAttribute("stroke", selectedCables[0].color);
+    cable.setAttribute("stroke-opacity", 1);
+    selectedCables = [];
+    return;
+  }
+
+  // Deselect all others
+  selectedCables.forEach(c => {
+    c.cableEl.setAttribute("stroke", c.color);
+    c.cableEl.setAttribute("stroke-opacity", 1);
+  });
+
+  // Select this cable
+  selectedCables = [{ cableEl: cable, color: currentStroke }];
+  cable.setAttribute("stroke-opacity", 0.6); // highlight with translucency
+});
+
+
+
+
 
   const dx = p2.x - p1.x;
   let isVertical = Math.abs(dx) < 1;
@@ -570,6 +664,7 @@ function createCable(p1, p2) {
     svg.appendChild(handleEl);
     return handleEl;
   }
+
 
   // --- Vertical cable: double-Q path ---
   if (isVertical) {
@@ -725,6 +820,17 @@ function createCable(p1, p2) {
   });
 }
 
+// Deselect cable by clicking empty SVG space
+svg.addEventListener("click", () => {
+  selectedCables.forEach(c => {
+    c.cableEl.setAttribute("stroke", c.color);
+    c.cableEl.setAttribute("stroke-opacity", 1); // reset to opaque
+  });
+  selectedCables = [];
+});
+
+
+
 
 // Render patch points
 patchPoints.forEach(p => {
@@ -816,8 +922,8 @@ patchPoints.forEach(p => {
 	  { type: 'selector', id: 'selector-osc4-wav', x: 318.4, y: 204.5, w: 16.5, h: 16.5, angles: [-45,-15,15,45], defaultAngle: -15 },
 	  
 	  // Faders
-      { type: 'fader', id: 'fader1', x: 556, y: 400, w: 20, h: 100, minY: 91, maxY: 143 },
-      { type: 'fader', id: 'fader2', x: 615, y: 400, w: 20, h: 100, minY: 91, maxY: 143 },
+      { type: 'fader', id: 'fader1', x: 557.5, y: 0, w: 17, h: 20, minY: 131, maxY: 183.5 },
+      { type: 'fader', id: 'fader2', x: 616.5, y: 0, w: 17, h: 20, minY: 131, maxY: 183.5 },
 
       // Switches
       { type: 'switch', id: 'switch-arp-mo', x: 77, y: 148, w: 11, h: 11, defaultState: 0 },
@@ -1203,12 +1309,13 @@ function saveAsJSON() {
   const patchNotes = document.getElementById('patch-notes').value;
 
   const data = {
+    version: 2, // new format version
     name: patchName,
     notes: patchNotes,
     patchPoints,
     controls: controls.map(ctrl => {
       const el = document.getElementById(ctrl.id);
-      const copy = { ...ctrl };
+      const copy = { ...ctrl, version: 2 }; // store version per control
       switch (ctrl.type) {
         case 'rotary':
         case 'filter':
@@ -1235,8 +1342,6 @@ function saveAsJSON() {
 
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
-
-  // Use patch name for filename if provided
   const fileName = patchName.trim() ? patchName.trim() + '.json' : 'Matriarch Patch.json';
 
   const a = document.createElement("a");
@@ -1274,20 +1379,17 @@ recallFileInput.addEventListener('change', (event) => {
       svg.querySelectorAll('path').forEach(p => p.remove());
       cables.length = 0;
 
-      // Restore cables with dblclick removal
+      // Restore cables
       if (Array.isArray(data.cables)) {
         data.cables.forEach(c => {
           const cable = document.createElementNS("http://www.w3.org/2000/svg", "path");
           cable.setAttribute("d", c.d);
           cable.setAttribute("stroke", c.color);
           cable.setAttribute("fill", "transparent");
-          cable.setAttribute("stroke-width", 2.5);
+          cable.setAttribute("stroke-width", 2.4);
           cable.setAttribute("stroke-linecap", "round");
-
-          // Only the line is clickable
           cable.style.pointerEvents = "stroke";
 
-          // Attach double-click handler
           cable.addEventListener("dblclick", () => {
             cable.remove();
             const index = cables.findIndex(e => e.d === c.d && e.from === c.from && e.to === c.to);
@@ -1304,20 +1406,45 @@ recallFileInput.addEventListener('change', (event) => {
         data.controls.forEach(ctrl => {
           const el = document.getElementById(ctrl.id);
           if (!el) return;
+
           switch(ctrl.type){
             case 'rotary':
             case 'filter':
             case 'selector':
               el.setAttribute("transform", ctrl.transform);
+              ctrl.defaultTransform = ctrl.transform; // set as new default
               break;
+
             case 'fader':
             case 'modwheel':
-              el.setAttribute("y", ctrl.y);
+              // --- Remap old patches only ---
+              if (!ctrl.version || ctrl.version === 1) {
+                const oldMinY = 91, oldMaxY = 143;
+                const newRanges = {
+                  fader1: { min: 131, max: 183.5 },
+                  fader2: { min: 131, max: 183.5 },
+                };
+                const range = newRanges[ctrl.id];
+                if (range) {
+                  const remappedY = ((ctrl.y - oldMinY) / (oldMaxY - oldMinY)) * (range.max - range.min) + range.min;
+                  el.setAttribute("y", remappedY);
+                  ctrl.defaultY = remappedY;
+                } else {
+                  el.setAttribute("y", ctrl.y);
+                  ctrl.defaultY = ctrl.y;
+                }
+              } else {
+                // New patch → use saved Y directly
+                el.setAttribute("y", ctrl.y);
+                ctrl.defaultY = ctrl.y;
+              }
               break;
+
             case 'switch':
             case 'button':
             case 'led':
               el.setAttribute("href", ctrl.href);
+              ctrl.defaultHref = ctrl.href;
               break;
           }
         });
@@ -1330,6 +1457,9 @@ recallFileInput.addEventListener('change', (event) => {
   };
   reader.readAsText(file);
 });
+
+
+
 
 document.getElementById('export-png').addEventListener('click', () => {
   const svgEl = document.getElementById('synth-panel');
@@ -1529,15 +1659,15 @@ window.addEventListener('load', () => {
 
 <div id="instructions" style="display:none; width: 100%; box-sizing: border-box; padding-left: 0px; font-family:'Bahnschrift', sans-serif; font-weight:350; font-stretch:condensed; font-size:16px; line-height:1.3; margin-top:1px;">
   <ul style="margin:0; padding-left:1em; list-style-position: outside;">
-    <li>You can resize the app by resizing your browser window or pinch-zoom on mobile and tablet devices.</li>
-	<li>Choose a cable colour, click/tap a patch point, then click/tap a destination patch point to set a cable. Double-click/tap it to remove it.</li>
-    <li>Use the small grey circular handles, located half-way along the cable, to alter the shape of the cable arc. Click and drag to move them.</li>
-	<li>It is possible to have multiple cables in one patch point.</li>
-	<li>Clicking the pedal jacks will indicate that a pedal should be plugged in.</li>
-    <li>Click and drag a control knob or fader, and click buttons & toggle switches to mimic the positions on your actual Matriarch.</li>
-	<li>Saving the patch will save a .json file with the name given in the 'Patch Name' field directly to your downloads folder. You can then use this file to reload the patch into the app at a later date.</li>
-	<li>In the same manner, exporting a PNG will save a png snapshot of the current app state, including the patch name and notes, with dimensions: 3440x1920 (App native).
-    <li>A colour slider for the control position indicators is available to help people who see colours differently. Set it to change the hue. (This is unavailable on Safari, due to restrictions of how it applies filters.)</li>
+    <li>Resize the app by resizing your browser window or pinch-zoom on mobile and tablet devices.</li>
+  <li>Click/tap a patch point, then click/tap a destination patch point to set a cable. Double-click/tap a cable to remove it. Multiple cables can connect to a single patch point.</li>
+  <li>Click a cable to select it (Shift-click to select multiple), then choose a colour from the picker. Choosing a colour with no cable selected sets the colour for the next cable.</li>
+  <li>Use the small grey circular handles halfway along a cable to adjust its arc. Click and drag to move them.</li>
+  <li>Click the pedal jacks to indicate a pedal should be plugged in.</li>
+  <li>Click and drag control knobs or faders, and click buttons and toggle switches to mimic the positions on your actual Matriarch.</li>
+  <li>Saving the patch will save a <code>.json</code> file with the name given in the 'Patch Name' field directly to your downloads folder. You can then use this file to reload the patch into the app at a later date.</li>
+  <li>In the same manner, exporting a PNG will save a <code>.png</code> snapshot of the current app state, including the patch name and notes, with dimensions: 3440x1920 (App native).</li>
+  <li>A colour slider for the control position indicators is available to help people who see colours differently. Set it to change the hue. <em>(Not available on Safari due to filter restrictions.)</em></li>
   </ul>
   <h2 style="font-family:'Bahnschrift', sans-serif; font-weight:350; font-stretch:condensed; font-size:18px; line-height:1.2; margin-bottom:5px;">Enjoy!</h2>
 </div>
@@ -1556,6 +1686,9 @@ window.addEventListener('load', () => {
     }
   });
 </script>
+
+<!-- Spacer after the instructions toggle button -->
+<div style="height: 40px;"></div>
 
 
 </body>
