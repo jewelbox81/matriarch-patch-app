@@ -1290,29 +1290,39 @@ controls.forEach(ctrl => {
 
 
 
-// --- JSON Export ---
 function saveAsJSON() {
   const patchName = document.getElementById('patch-name').value;
   const patchNotes = document.getElementById('patch-notes').value;
 
+  // --- Detect pedal visibility state ---
+  const pedalState = pedalMappings.map(({ pedal, targets }) => {
+    const first = document.getElementById(targets[0]);
+    return {
+      id: pedal,
+      visible: first && first.style.opacity === '1'
+    };
+  });
+
   const data = {
-    version: 2, // new format version
+    version: 3, // bumped version since format changed
     name: patchName,
     notes: patchNotes,
     patchPoints,
     controls: controls.map(ctrl => {
       const el = document.getElementById(ctrl.id);
-      const copy = { ...ctrl, version: 2 }; // store version per control
+      const copy = { ...ctrl, version: 2 };
       switch (ctrl.type) {
         case 'rotary':
         case 'filter':
         case 'selector':
           copy.transform = el.getAttribute("transform");
           break;
+
         case 'fader':
         case 'modwheel':
           copy.y = parseFloat(el.getAttribute("y"));
           break;
+
         case 'switch':
         case 'button':
         case 'led':
@@ -1321,10 +1331,15 @@ function saveAsJSON() {
       }
       return copy;
     }),
+
+    // --- Save cables (unchanged) ---
     cables: Array.from(svg.querySelectorAll("path")).map(path => ({
       d: path.getAttribute("d"),
       color: path.getAttribute("stroke")
-    }))
+    })),
+
+    // --- NEW: Save pedal states ---
+    pedals: pedalState
   };
 
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -1341,7 +1356,6 @@ function saveAsJSON() {
 document.getElementById('save-json').addEventListener('click', saveAsJSON);
 
 
-// --- JSON Recall ---
 const recallBtn = document.getElementById('recall-json');
 const recallFileInput = document.getElementById('recall-file');
 const patchNameInput = document.getElementById('patch-name');
@@ -1399,12 +1413,11 @@ recallFileInput.addEventListener('change', (event) => {
             case 'filter':
             case 'selector':
               el.setAttribute("transform", ctrl.transform);
-              ctrl.defaultTransform = ctrl.transform; // set as new default
+              ctrl.defaultTransform = ctrl.transform;
               break;
 
             case 'fader':
             case 'modwheel':
-              // --- Remap old patches only ---
               if (!ctrl.version || ctrl.version === 1) {
                 const oldMinY = 91, oldMaxY = 143;
                 const newRanges = {
@@ -1421,7 +1434,6 @@ recallFileInput.addEventListener('change', (event) => {
                   ctrl.defaultY = ctrl.y;
                 }
               } else {
-                // New patch → use saved Y directly
                 el.setAttribute("y", ctrl.y);
                 ctrl.defaultY = ctrl.y;
               }
@@ -1437,6 +1449,23 @@ recallFileInput.addEventListener('change', (event) => {
         });
       }
 
+      // --- Restore pedal visibility ---
+      if (Array.isArray(data.pedals)) {
+        data.pedals.forEach(p => {
+          const mapping = pedalMappings.find(m => m.pedal === p.id);
+          if (!mapping) return;
+
+          const { targets } = mapping;
+
+          targets.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.style.opacity = p.visible ? '1' : '0';
+            el.style.pointerEvents = p.visible ? 'auto' : 'none';
+          });
+        });
+      }
+
     } catch(err) {
       alert('Invalid JSON file!');
       console.error(err);
@@ -1444,6 +1473,7 @@ recallFileInput.addEventListener('change', (event) => {
   };
   reader.readAsText(file);
 });
+
 
 
 
